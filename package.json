@@ -28,5 +28,6 @@
   "dependencies": {
     "@openzeppelin/contracts": "^4.8.0",
     "dotenv": "^16.0.3"
-  }
+  },
+  "packageManager": "yarn@1.22.19"
 }
