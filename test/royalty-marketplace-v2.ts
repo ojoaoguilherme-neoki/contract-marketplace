@@ -12,7 +12,7 @@ describe("TESTING MARKETPLACE WITH ROYALTIES", function () {
     const NKO = await ethers.getContractFactory("NikoToken");
 
     const NFTS = await ethers.getContractFactory("NeokiNftRoyalty");
-    const Marketplace = await ethers.getContractFactory("NeokiMarketplace");
+    const Marketplace = await ethers.getContractFactory("NeokiMarketplaceV2");
     const nko = await NKO.deploy(deployer.address);
     await nko.deployed();
     const nfts = await NFTS.deploy();

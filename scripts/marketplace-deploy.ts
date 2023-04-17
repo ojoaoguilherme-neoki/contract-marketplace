@@ -2,22 +2,35 @@ import hre from "hardhat";
 import {
   STAKING_POOL_ADDRESS,
   FOUNDATION_WALLET,
-  NEOKI_NFT_CONTRACT,
   NIKO_TOKEN_ADDRESS,
+  ADMIN_WALLET,
 } from "./constant/Contracts";
 
 async function main() {
-  const Marketplace = await hre.ethers.getContractFactory("NeokiMarketplace");
+  const Marketplace = await hre.ethers.getContractFactory("NeokiMarketplaceV2");
   const marketplace = await Marketplace.deploy(
     FOUNDATION_WALLET,
     STAKING_POOL_ADDRESS,
     NIKO_TOKEN_ADDRESS,
-    NEOKI_NFT_CONTRACT
+    ADMIN_WALLET
   );
 
   console.log("Deploying Marketplace, wait for contract address...");
   await marketplace.deployed();
   console.log(`Marketplace deployed at ${marketplace.address}`);
+  console.log("Wait 20seg to verify the contract");
+  await sleep(20000);
+  await hre.run("verify:verify", {
+    address: marketplace.address,
+
+    constructorArguments: [
+      FOUNDATION_WALLET,
+      STAKING_POOL_ADDRESS,
+      NIKO_TOKEN_ADDRESS,
+      ADMIN_WALLET,
+    ],
+  });
+  console.log("Done.");
 }
 
 function sleep(ms: number) {

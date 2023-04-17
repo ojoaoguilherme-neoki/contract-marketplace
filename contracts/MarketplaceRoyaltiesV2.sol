@@ -9,19 +9,19 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
+contract NeokiMarketplaceV2 is ERC1155Holder, ReentrancyGuard, AccessControl {
     bytes4 private constant _INTERFACE_ID_ERC2981 = 0x2a55205a;
     bytes4 private constant _INTERFACE_ID_ERC1155Receiver = 0x4e2312e0;
     bytes32 public constant MARKETPLACE_ADMIN_ROLE =
         keccak256("MARKETPLACE_ADMIN_ROLE_ROLE");
+    bytes32 public constant FOUNDATION_ROLE = keccak256("FOUNDATION_ROLE");
     bytes32 public constant CHANGE_FEE_ROLE = keccak256("CHANGE_FEE_ROLE");
 
     using Counters for Counters.Counter;
     using SafeERC20 for IERC20;
-    Counters.Counter public nftSold; // show on the UI
+    Counters.Counter public nftSold;
     Counters.Counter public totalSoledItems;
     Counters.Counter private _totalItems;
-    Counters.Counter private _unavailableItems;
 
     address public foundation;
     address public stakingPool;
@@ -53,11 +53,14 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
             _stakingPool != address(0),
             "Staking Pool address cannot be set to zero"
         );
+        require(_admin != address(0), "Admin address cannot be set to zero");
         foundation = _foundation;
         stakingPool = _stakingPool;
         nko = IERC20(_nko);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(FOUNDATION_ROLE, msg.sender);
         _grantRole(MARKETPLACE_ADMIN_ROLE, _admin);
+        _grantRole(FOUNDATION_ROLE, foundation);
     }
 
     event NewListing(
@@ -69,21 +72,10 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
         address nftContract
     );
 
-    event NewBoughtItem(
-        uint256 itemId,
-        uint256 tokenId,
-        uint256 price,
-        uint256 amount,
-        address seller,
-        address nftContract,
-        address buyer,
-        uint256 buyingAmount,
-        uint256 payed
-    );
-    event DeleteItem(uint256 tokenId);
+    event BuyItem(uint256 itemId, uint256 listedAmount);
+    event DeleteItem(uint256 itemId);
     event UpdateItemPrice(uint256 itemId, uint256 newPrice);
-    event UpdateItemAddAmount(uint256 itemId, uint256 addingAmount);
-    event UpdateItemRemoveAmount(uint256 itemId, uint256 addingAmount);
+    event UpdateItemAmount(uint256 itemId, uint256 newListedAmount);
     event UpdateMarketplaceFee(address indexed sender, uint16 amount);
 
     /**
@@ -161,14 +153,20 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
         }
         nko.safeTransferFrom(msg.sender, address(this), paying);
         if (feeAmount > 0) {
-            nko.safeTransfer(foundation, feeAmount / 2);
-            nko.safeTransfer(stakingPool, feeAmount / 2);
+            uint256 foundationFee = feeAmount / 2;
+            uint256 stakingPoolFee = feeAmount - foundationFee;
+
+            nko.safeTransfer(foundation, foundationFee);
+            nko.safeTransfer(stakingPool, stakingPoolFee);
         }
 
         if (receiver != address(0) && royaltyAmount > 0) {
             nko.safeTransfer(receiver, royaltyAmount);
         }
-        nko.safeTransfer(item.owner, paying - (feeAmount + royaltyAmount));
+
+        uint256 payoutToItemOwner = paying - (feeAmount + royaltyAmount);
+        nko.safeTransfer(item.owner, payoutToItemOwner);
+
         IERC1155 asset = IERC1155(item.nftContract);
         asset.safeTransferFrom(
             address(this),
@@ -183,24 +181,14 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
         for (uint i = 0; i < _amount; i++) {
             nftSold.increment();
         }
+
+        emit BuyItem(item.itemId, item.amount);
         if (item.amount == 0) {
             totalSoledItems.increment();
-            _unavailableItems.increment();
+            _totalItems.decrement();
             delete marketItem[_itemId];
             emit DeleteItem(_itemId);
         }
-
-        emit NewBoughtItem(
-            item.itemId,
-            item.tokenId,
-            item.price,
-            item.amount,
-            item.owner,
-            item.nftContract,
-            msg.sender,
-            _amount,
-            paying
-        );
     }
 
     /**
@@ -208,11 +196,8 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
      */
     function getAllItems() public view returns (MarketItem[] memory) {
         uint256 totalItems = _totalItems.current();
-        uint256 unavailableItems = _unavailableItems.current();
-        uint256 unsoldItemCount = totalItems - unavailableItems;
-
         uint256 itemIndex = 0;
-        MarketItem[] memory items = new MarketItem[](unsoldItemCount);
+        MarketItem[] memory items = new MarketItem[](totalItems);
 
         for (uint256 i = 0; i < totalItems; i++) {
             MarketItem storage item = marketItem[i + 1];
@@ -232,9 +217,7 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
         address owner
     ) public view returns (MarketItem[] memory) {
         uint256 totalItems = _totalItems.current();
-        uint256 unavailableItems = _unavailableItems.current();
-        uint256 itemCount = totalItems - unavailableItems;
-        MarketItem[] memory items = new MarketItem[](itemCount);
+        MarketItem[] memory items = new MarketItem[](totalItems);
         uint256 itemIndex;
         for (uint256 i = 0; i < totalItems; i++) {
             MarketItem storage item = marketItem[i + 1];
@@ -255,6 +238,7 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
         uint256 _itemId,
         uint256 _newPrice
     ) external nonReentrant {
+        require(_newPrice > 0, "Marketplace: Cannot set price to zero");
         MarketItem storage item = marketItem[_itemId];
         require(
             item.owner == msg.sender,
@@ -287,7 +271,7 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
             ""
         );
         item.amount += _addingAmount;
-        emit UpdateItemAddAmount(_itemId, _addingAmount);
+        emit UpdateItemAmount(_itemId, item.amount);
     }
 
     /**
@@ -306,8 +290,12 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
         );
         require(item.amount > 0, "Marketplace: There is no NFT to withdraw");
         require(
+            item.amount <= _removeAmount,
+            "Marketplace: Caller requested higher amount than balance"
+        );
+        require(
             item.amount - _removeAmount >= 0,
-            "Marketplace: removeMyListingItemAmount underflow"
+            "Marketplace: Cannot withdraw more than balance"
         );
         IERC1155 asset = IERC1155(item.nftContract);
         item.amount -= _removeAmount;
@@ -320,10 +308,12 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
             ""
         );
         if (item.amount == 0) {
-            _unavailableItems.increment();
+            _totalItems.decrement();
             delete marketItem[_itemId];
+            emit DeleteItem(_itemId);
+        } else {
+            emit UpdateItemAmount(_itemId, item.amount);
         }
-        emit UpdateItemRemoveAmount(_itemId, _removeAmount);
     }
 
     function checkRoyalties(address _contract) internal view returns (bool) {
@@ -362,7 +352,7 @@ contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
      */
     function updateFoundation(
         address newAddress
-    ) public onlyRole(MARKETPLACE_ADMIN_ROLE) {
+    ) public onlyRole(FOUNDATION_ROLE) {
         require(
             newAddress != address(0),
             "Cannot set Foundation to address zero"

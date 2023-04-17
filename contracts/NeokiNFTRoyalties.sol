@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 contract NeokiNftRoyalty is ERC2981, ERC1155 {
     using Counters for Counters.Counter;
     mapping(uint256 => string) private _uris;
+    string public constant name = "Neoki Multi Metaverse";
     Counters.Counter public _tokenIdCounter;
 
     constructor() ERC1155("") {}
@@ -17,43 +18,19 @@ contract NeokiNftRoyalty is ERC2981, ERC1155 {
      * @param account is the address that will be recieving `tokenId`
      * @param amount supply generated of `tokenId`
      * @param tokenURI is the URL that points to `tokenId` token metadata
-     * @param data is an hex value that can be sent "0x" if there ir no value to send
+     * @param royalty is the `%` fee royalty se `_setTokenRoyalty` from { ERC2981 }
      */
 
     function mint(
         address account,
         uint256 amount,
         string memory tokenURI,
-        bytes memory data
-    ) public returns (uint256) {
-        _tokenIdCounter.increment();
-        uint tokenId = _tokenIdCounter.current();
-
-        _mint(account, tokenId, amount, data);
-        setTokenUri(tokenId, tokenURI);
-        return tokenId;
-    }
-
-    /**
-     * @dev mints a new `tokenId` with royalty information
-     * @param account is the address that will be recieving `tokenId`
-     * @param amount supply generated of `tokenId`
-     * @param tokenURI is the URL that points to `tokenId` token metadata
-     * @param data is an hex value that can be sent "0x" if there ir no value to send
-     * @param royalty is the `%` fee royalty se `_setTokenRoyalty` from { ERC2981 }
-     */
-
-    function mintWithRoyalties(
-        address account,
-        uint256 amount,
-        string memory tokenURI,
-        uint96 royalty,
-        bytes memory data
+        uint96 royalty
     ) public returns (uint256) {
         _tokenIdCounter.increment();
         uint256 tokenId = _tokenIdCounter.current();
 
-        _mint(account, tokenId, amount, data);
+        _mint(account, tokenId, amount, "");
         setTokenUri(tokenId, tokenURI);
         _setTokenRoyalty(tokenId, account, royalty);
         return _tokenIdCounter.current();
