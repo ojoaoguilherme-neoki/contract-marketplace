@@ -4,12 +4,13 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract NeokiMarketplaceV2 is ERC1155Holder, ReentrancyGuard, AccessControl {
+contract NeokiMarketplace is ERC1155Holder, ReentrancyGuard, AccessControl {
     bytes4 private constant _INTERFACE_ID_ERC2981 = 0x2a55205a;
     bytes4 private constant _INTERFACE_ID_ERC1155Receiver = 0x4e2312e0;
     bytes32 public constant MARKETPLACE_ADMIN_ROLE =
@@ -45,6 +46,7 @@ contract NeokiMarketplaceV2 is ERC1155Holder, ReentrancyGuard, AccessControl {
         address _nko,
         address _admin
     ) {
+        require(_nko != address(0), "NKO address cannot be set to zero");
         require(
             _foundation != address(0),
             "Foundation address cannot be set to zero"
@@ -183,6 +185,7 @@ contract NeokiMarketplaceV2 is ERC1155Holder, ReentrancyGuard, AccessControl {
         }
 
         emit BuyItem(item.itemId, item.amount);
+
         if (item.amount == 0) {
             totalSoledItems.increment();
             _totalItems.decrement();
@@ -217,16 +220,25 @@ contract NeokiMarketplaceV2 is ERC1155Holder, ReentrancyGuard, AccessControl {
         address owner
     ) public view returns (MarketItem[] memory) {
         uint256 totalItems = _totalItems.current();
-        MarketItem[] memory items = new MarketItem[](totalItems);
         uint256 itemIndex;
+        uint256 userListings;
+
+        for (uint256 i = 0; i < totalItems; i++) {
+            MarketItem storage item = marketItem[i + 1];
+            if (item.owner == owner) {
+                userListings++;
+            }
+        }
+
+        MarketItem[] memory listings = new MarketItem[](userListings);
         for (uint256 i = 0; i < totalItems; i++) {
             MarketItem storage item = marketItem[i + 1];
             if (item.owner == owner && item.amount > 0) {
-                items[itemIndex] = item;
+                listings[itemIndex] = item;
                 itemIndex++;
             }
         }
-        return items;
+        return listings;
     }
 
     /**
@@ -290,7 +302,7 @@ contract NeokiMarketplaceV2 is ERC1155Holder, ReentrancyGuard, AccessControl {
         );
         require(item.amount > 0, "Marketplace: There is no NFT to withdraw");
         require(
-            item.amount <= _removeAmount,
+            item.amount >= _removeAmount,
             "Marketplace: Caller requested higher amount than balance"
         );
         require(

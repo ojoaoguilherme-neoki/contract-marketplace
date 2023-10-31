@@ -7,11 +7,12 @@ import {
 } from "./constant/Contracts";
 
 async function main() {
-  const Marketplace = await hre.ethers.getContractFactory("NeokiMarketplaceV2");
+  const Marketplace = await hre.ethers.getContractFactory("NeokiMarketplace");
+
   const marketplace = await Marketplace.deploy(
     FOUNDATION_WALLET,
     STAKING_POOL_ADDRESS,
-    NIKO_TOKEN_ADDRESS,
+    "0xD416889755FCceF5bEFFb5BDE6bcf57C11813F8E", // NIKO_TOKEN_ADDRESS,
     ADMIN_WALLET
   );
 
@@ -26,10 +27,11 @@ async function main() {
     constructorArguments: [
       FOUNDATION_WALLET,
       STAKING_POOL_ADDRESS,
-      NIKO_TOKEN_ADDRESS,
+      '"0xD416889755FCceF5bEFFb5BDE6bcf57C11813F8E"', //NIKO_TOKEN_ADDRESS,
       ADMIN_WALLET,
     ],
   });
+
   console.log("Done.");
 }
 

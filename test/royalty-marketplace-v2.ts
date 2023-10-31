@@ -11,12 +11,16 @@ describe("TESTING MARKETPLACE WITH ROYALTIES", function () {
       await ethers.getSigners();
     const NKO = await ethers.getContractFactory("NikoToken");
 
-    const NFTS = await ethers.getContractFactory("NeokiNftRoyalty");
-    const Marketplace = await ethers.getContractFactory("NeokiMarketplaceV2");
+    const NFTS = await ethers.getContractFactory("NeokiNFTs");
+    const Erc721nfts = await ethers.getContractFactory("NFTS");
+    const Marketplace = await ethers.getContractFactory("NeokiMarketplace");
     const nko = await NKO.deploy(deployer.address);
     await nko.deployed();
     const nfts = await NFTS.deploy();
     await nfts.deployed();
+
+    const erc721nfts = await Erc721nfts.deploy();
+    await erc721nfts.deployed();
 
     const marketplace = await Marketplace.deploy(
       foundation.address,
@@ -37,49 +41,59 @@ describe("TESTING MARKETPLACE WITH ROYALTIES", function () {
       nko,
       nfts,
       marketplace,
+      erc721nfts,
     };
   }
   async function loadListingFixture() {
     const { deployer, seller, nko, marketplace, foundation, nfts, wallet1 } =
       await loadFixture(deployContractsFixture);
-    const tx = await nko
-      .connect(deployer)
-      .transfer(seller.address, parseEther("2000"));
+    await nko.connect(deployer).transfer(seller.address, parseEther("2000"));
 
-    const approveNfts = await nfts
+    await nfts.connect(seller).setApprovalForAll(marketplace.address, true);
+
+    return { seller, nko, marketplace, foundation, nfts, wallet1 };
+  }
+
+  async function loadListingErc721Fixture() {
+    const {
+      deployer,
+      seller,
+      nko,
+      marketplace,
+      foundation,
+      nfts,
+      wallet1,
+      erc721nfts,
+    } = await loadFixture(deployContractsFixture);
+    await nko.connect(deployer).transfer(seller.address, parseEther("2000"));
+
+    await nfts.connect(seller).setApprovalForAll(marketplace.address, true);
+    await erc721nfts
       .connect(seller)
       .setApprovalForAll(marketplace.address, true);
 
-    return { seller, nko, marketplace, foundation, nfts, wallet1 };
+    return { seller, nko, marketplace, foundation, nfts, wallet1, erc721nfts };
   }
 
   async function loadListedItemsFixture() {
     const { seller, nfts, marketplace, nko, deployer, wallet1 } =
       await loadFixture(deployContractsFixture);
 
-    const tx = await nko
-      .connect(deployer)
-      .transfer(seller.address, parseEther("2000"));
+    await nko.connect(deployer).transfer(seller.address, parseEther("2000"));
 
     // Creating NFT
-    const create = await nfts
-      .connect(seller)
-      .mint(seller.address, 1, tokenURI, 400);
-    const createCollection = await nfts
-      .connect(seller)
-      .mint(seller.address, 30, tokenURI, 400);
+    await nfts.connect(seller).mint(seller.address, 1, tokenURI, 400, "0x");
+    await nfts.connect(seller).mint(seller.address, 30, tokenURI, 400, "0x");
 
     // Approving NFTs
-    const nftsApprove = await nfts
-      .connect(seller)
-      .setApprovalForAll(marketplace.address, true);
+    await nfts.connect(seller).setApprovalForAll(marketplace.address, true);
 
     // Listing NFTs
-    const list = await marketplace
+    await marketplace
       .connect(seller)
       .listItem(nfts.address, 1, 1, parseEther("500"), "0x");
 
-    const listCollection = await marketplace
+    await marketplace
       .connect(seller)
       .listItem(nfts.address, 2, "25", parseEther("75"), "0x");
 
@@ -108,40 +122,26 @@ describe("TESTING MARKETPLACE WITH ROYALTIES", function () {
     } = await loadFixture(deployContractsFixture);
 
     // transferring tokens to actors
-    const tx = await nko
-      .connect(deployer)
-      .transfer(buyer.address, parseEther("2000"));
-    await tx.wait();
+    await nko.connect(deployer).transfer(buyer.address, parseEther("2000"));
 
     // approving ERC20 to marketplace
-    const approveErc20token = await nko
-      .connect(buyer)
-      .approve(marketplace.address, parseEther("2000"));
-    await approveErc20token.wait();
+    await nko.connect(buyer).approve(marketplace.address, parseEther("2000"));
 
     // creating NFT with royalty
-    const createNft = await nfts
-      .connect(seller)
-      .mint(seller.address, 1, tokenURI, 400);
-    await createNft.wait();
+    await nfts.connect(seller).mint(seller.address, 1, tokenURI, 400, "0x");
 
     // transferring nft of seller to wallet 1
-    const transfer = await nfts
+    await nfts
       .connect(seller)
       .safeTransferFrom(seller.address, wallet1.address, 1, 1, "0x");
-    await transfer.wait();
 
     // // approving wallet 1 NFT to marketplace
 
-    const nftApprove = await nfts
-      .connect(wallet1)
-      .setApprovalForAll(marketplace.address, true);
-    await nftApprove.wait();
+    await nfts.connect(wallet1).setApprovalForAll(marketplace.address, true);
 
-    const list = await marketplace
+    await marketplace
       .connect(wallet1)
       .listItem(nfts.address, 1, 1, parseEther("100"), "0x");
-    await list.wait();
 
     return {
       deployer,
@@ -172,40 +172,26 @@ describe("TESTING MARKETPLACE WITH ROYALTIES", function () {
     } = await loadFixture(deployContractsFixture);
 
     // transferring tokens to actors
-    const tx = await nko
-      .connect(deployer)
-      .transfer(buyer.address, parseEther("2000"));
-    await tx.wait();
+    await nko.connect(deployer).transfer(buyer.address, parseEther("2000"));
 
     // approving ERC20 to marketplace
-    const approveErc20token = await nko
-      .connect(buyer)
-      .approve(marketplace.address, parseEther("2000"));
-    await approveErc20token.wait();
+    await nko.connect(buyer).approve(marketplace.address, parseEther("2000"));
 
     // creating NFT with no royalty
-    const createNft = await nfts
-      .connect(seller)
-      .mint(seller.address, 1, tokenURI, 0);
-    await createNft.wait();
+    await nfts.connect(seller).mint(seller.address, 1, tokenURI, 0, "0x");
 
     // transferring nft of seller to wallet 1
-    const transfer = await nfts
+    await nfts
       .connect(seller)
       .safeTransferFrom(seller.address, wallet1.address, 1, 1, "0x");
-    await transfer.wait();
 
     // // approving wallet 1 NFT to marketplace
 
-    const nftApprove = await nfts
-      .connect(wallet1)
-      .setApprovalForAll(marketplace.address, true);
-    await nftApprove.wait();
+    await nfts.connect(wallet1).setApprovalForAll(marketplace.address, true);
 
-    const list = await marketplace
+    await marketplace
       .connect(wallet1)
       .listItem(nfts.address, 1, 1, parseEther("100"), "0x");
-    await list.wait();
 
     return {
       deployer,
@@ -255,7 +241,7 @@ describe("TESTING MARKETPLACE WITH ROYALTIES", function () {
       const { nfts, seller, wallet1 } = await loadFixture(loadListingFixture);
       const create = await nfts
         .connect(seller)
-        .mint(seller.address, 1, tokenURI, 300);
+        .mint(seller.address, 1, tokenURI, 300, "0x");
       await create.wait();
 
       const tx = await nfts
@@ -275,7 +261,7 @@ describe("TESTING MARKETPLACE WITH ROYALTIES", function () {
       );
       const createCollection = await nfts
         .connect(seller)
-        .mint(seller.address, 10, tokenURI, 500);
+        .mint(seller.address, 10, tokenURI, 500, "0x");
 
       await createCollection.wait();
 
@@ -288,13 +274,32 @@ describe("TESTING MARKETPLACE WITH ROYALTIES", function () {
       expect(items[0].amount).to.equal(10);
     });
 
+    it.only("User should create a collection of ERC721 NFTs and list it to the marketplace", async function () {
+      const { seller, marketplace, erc721nfts } = await loadFixture(
+        loadListingErc721Fixture
+      );
+      await erc721nfts.connect(seller).mint(seller.address);
+      await expect(
+        erc721nfts
+          .connect(seller)
+          .transferFrom(seller.address, marketplace.address, 1)
+      ).to.changeTokenBalance(erc721nfts, marketplace, 1);
+      // await marketplace
+      //   .connect(seller)
+      //   .listItem(erc721nfts.address, 1, 1, parseEther("250"), "0x");
+
+      // const items = await marketplace.getAllItems();
+      // expect(items).to.be.lengthOf(1);
+      // expect(items[0].amount).to.equal(1);
+    });
+
     it("Marketplace contract should create item with correct listing information", async function () {
       const { seller, marketplace, nfts } = await loadFixture(
         loadListingFixture
       );
       const createItem = await nfts
         .connect(seller)
-        .mint(seller.address, 1, tokenURI, 500);
+        .mint(seller.address, 1, tokenURI, 500, "0x");
       await createItem.wait();
 
       const list = await marketplace
